@@ -6,6 +6,7 @@
     CONDITIONS OF ANY KIND, either express or implied.
 */
 #include <stdint.h>
+#include <sys/types.h>
 
 /*
  * initialize S/PDIF driver
