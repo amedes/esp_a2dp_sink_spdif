@@ -9,7 +9,11 @@
 #include "freertos/FreeRTOS.h"
 #include "driver/i2s.h"
 
-#ifdef CONFIG_EXAMPLE_A2DP_SINK_OUTPUT_SPDIF
+#ifdef CONFIG_SPDIF_DATA_PIN
+#define SPDIF_DATA_PIN CONFIG_SPDIF_DATA_PIN
+#else
+#define SPDIF_DATA_PIN		27
+#endif
 
 #define I2S_NUM			(0)
 
@@ -106,10 +110,12 @@ void spdif_init(int rate)
 	.tx_desc_auto_clear = true,
     	.fixed_mclk = mclk,	// avoiding I2S bug
     };
+
+
     i2s_pin_config_t pin_config = {
         .bck_io_num = -1,
         .ws_io_num = -1,
-        .data_out_num = CONFIG_SPDIF_DATA_PIN,
+        .data_out_num = SPDIF_DATA_PIN,
         .data_in_num = -1,
     };
 
@@ -153,5 +159,3 @@ void spdif_set_sample_rates(int rate)
     i2s_driver_uninstall(I2S_NUM);
     spdif_init(rate);
 }
-
-#endif // SPDIF
