@@ -142,8 +142,10 @@ static void bt_i2s_task_handler(void *arg)
 	    extern uint8_t s_volume;
 	    int16_t *audio = (int16_t *)data;
 
-	    for (int i = 0; i < item_size / sizeof(uint16_t); i++) {
-		audio[i] = (audio[i] * s_volume) / 127;
+	    if (s_volume < 127) {
+	    	for (int i = 0; i < item_size / sizeof(uint16_t); i++) {
+		    audio[i] = (audio[i] * s_volume) >> 7;
+		}
 	    }
 
 	    spdif_write(data, item_size);
