@@ -35,7 +35,7 @@ static uint32_t *spdif_ptr;
 /*
  * 8bit PCM to 16bit BMC conversion table, LSb first, 1 end
  */
-static const uint16_t bmc_tab[256] = {
+static const int16_t bmc_tab[256] = {
     0x3333, 0xb333, 0xd333, 0x5333, 0xcb33, 0x4b33, 0x2b33, 0xab33,
     0xcd33, 0x4d33, 0x2d33, 0xad33, 0x3533, 0xb533, 0xd533, 0x5533,
     0xccb3, 0x4cb3, 0x2cb3, 0xacb3, 0x34b3, 0xb4b3, 0xd4b3, 0x54b3,
@@ -131,7 +131,8 @@ void spdif_write(const void *src, size_t size)
     while (p < (uint8_t *)src + size) {
 
 	// convert PCM 16bit data to BMC 32bit pulse pattern
-	*(spdif_ptr + 1) = ((uint32_t)(((bmc_tab[*p] << 16) ^ (int16_t)bmc_tab[*(p + 1)]) << 1) >> 1);
+	*(spdif_ptr + 1) = (uint32_t)(((bmc_tab[*p] << 16) ^ bmc_tab[*(p + 1)]) << 1) >> 1;
+
 	p += 2;
 	spdif_ptr += 2; 	// advance to next audio data
  
