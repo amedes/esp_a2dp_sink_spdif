@@ -32,6 +32,8 @@ static xTaskHandle s_bt_app_task_handle = NULL;
 static xTaskHandle s_bt_i2s_task_handle = NULL;
 static RingbufHandle_t s_ringbuf_i2s = NULL;;
 
+#define RINGBUF_SIZE (16 * 1024)
+
 bool bt_app_work_dispatch(bt_app_cb_t p_cback, uint16_t event, void *p_params, int param_len, bt_app_copy_cb_t p_copy_cback)
 {
     ESP_LOGD(BT_APP_CORE_TAG, "%s event 0x%x, param len %d", __func__, event, param_len);
@@ -159,7 +161,7 @@ static void bt_i2s_task_handler(void *arg)
 
 void bt_i2s_task_start_up(void)
 {
-    s_ringbuf_i2s = xRingbufferCreate(8 * 1024, RINGBUF_TYPE_BYTEBUF);
+    s_ringbuf_i2s = xRingbufferCreate(RINGBUF_SIZE, RINGBUF_TYPE_BYTEBUF);
     if(s_ringbuf_i2s == NULL){
         return;
     }
@@ -185,8 +187,19 @@ void bt_i2s_task_shut_down(void)
     }
 }
 
+#define AUDIO_SAMPLE_SIZE (16 * 2 / 8) // 16bit, 2ch, 8bit/byte
+
 size_t write_ringbuf(const uint8_t *data, size_t size)
 {
+    // rate control
+    UBaseType_t items;
+    vRingbufferGetInfo(s_ringbuf_i2s, NULL, NULL, NULL, NULL, &items);
+    if (items < RINGBUF_SIZE * 3 / 8) {
+        xRingbufferSend(s_ringbuf_i2s, (void *)data, AUDIO_SAMPLE_SIZE, (portTickType)portMAX_DELAY);
+    } else if (items > RINGBUF_SIZE * 5 / 8) {
+        size -= AUDIO_SAMPLE_SIZE;
+    }
+
     BaseType_t done = xRingbufferSend(s_ringbuf_i2s, (void *)data, size, (portTickType)portMAX_DELAY);
     if(done){
         return size;
