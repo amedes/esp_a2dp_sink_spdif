@@ -191,7 +191,7 @@ static void bt_av_hdl_stack_evt(uint16_t event, void *p_param)
     case BT_APP_EVT_STACK_UP: {
         /* set up device name */
         //char *dev_name = "ESP_SPEAKER";
-        char *dev_name = "JOB_SPDIF";
+        char *dev_name = "ESP_S/PDIF";
         esp_bt_dev_set_device_name(dev_name);
 
         esp_bt_gap_register_callback(bt_app_gap_cb);
