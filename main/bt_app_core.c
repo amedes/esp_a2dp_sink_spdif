@@ -126,7 +126,10 @@ static void bt_i2s_task_handler(void *arg)
 {
     uint8_t *data = NULL;
     size_t item_size = 0;
-#ifndef CONFIG_EXAMPLE_A2DP_SINK_OUTPUT_SPDIF
+#ifdef CONFIG_EXAMPLE_A2DP_SINK_OUTPUT_SPDIF
+    extern uint8_t s_volume;
+    s_volume = 100;		// initialize default volume
+#else
     size_t bytes_written = 0;
 #endif
 
@@ -141,12 +144,11 @@ static void bt_i2s_task_handler(void *arg)
 	    }
 #endif
 #ifdef CONFIG_EXAMPLE_A2DP_SINK_OUTPUT_SPDIF
-	    extern uint8_t s_volume;
 	    int16_t *audio = (int16_t *)data;
 
-	    if (s_volume < 127) {
+	    if (s_volume < 100) {
 	    	for (int i = 0; i < item_size / sizeof(uint16_t); i++) {
-		    audio[i] = (audio[i] * s_volume) >> 7;
+		    audio[i] = (audio[i] * s_volume) / 100;
 		}
 	    }
 
