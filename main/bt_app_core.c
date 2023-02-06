@@ -191,20 +191,99 @@ void bt_i2s_task_shut_down(void)
 
 #define AUDIO_SAMPLE_SIZE (16 * 2 / 8) // 16bit, 2ch, 8bit/byte
 
-size_t write_ringbuf(const uint8_t *data, size_t size)
-{
-    // rate control
+// Calculate a floating average of buffer fill percentage
+// Since the buffer usually fills slowly and then gets empty in one go
+// the 100% average filled will be at RINGBUF_SIZE / 2
+// Values > 100 could be returned. This is when buffer overflows are likely
+UBaseType_t buffer_floating_avg() {
+    const static UBaseType_t avg_range = 200;
+    static UBaseType_t avg_items = RINGBUF_SIZE / 8;  // assume 25% at start
+
     UBaseType_t items;
     vRingbufferGetInfo(s_ringbuf_i2s, NULL, NULL, NULL, NULL, &items);
-    if (items < RINGBUF_SIZE * 3 / 8) {
-        xRingbufferSend(s_ringbuf_i2s, (void *)data, AUDIO_SAMPLE_SIZE, (portTickType)portMAX_DELAY);
-    } else if (items > RINGBUF_SIZE * 5 / 8) {
-        size -= AUDIO_SAMPLE_SIZE;
+    avg_items = ((avg_range - 1) * avg_items + items) / avg_range;
+
+    return avg_items * 100 / (RINGBUF_SIZE / 2);
+}
+
+// Return true if serial output of buffer fill status should be printed
+// Either if number of dropped samples changes (force==true) or every count_max calls
+bool rate_limited_output( bool force ) {
+    const static UBaseType_t count_max = 100;
+    static UBaseType_t count = 0;
+    if( force || ++count > count_max) {
+        count = 0;
+        return true;
+    }
+    return false;
+}
+
+// Return number of samples to drop in the new data
+// Make sure the number toggles rarely by using hysteresis
+int rate_control()
+{
+    const static UBaseType_t percent_limits[] = { 15, 25, 35, 45, 55 };  // limits to change curr_diff
+    const static int max_diff = 1;   // max samples to add to the new data 
+    const static int min_diff = -3;  // max samples to chop off the new data
+    static int last_diff = 0;        // start with unchanged data
+
+    int curr_diff = last_diff;       // start with unchanged level
+
+    UBaseType_t filled_percent = buffer_floating_avg();
+    if( curr_diff != max_diff && filled_percent < percent_limits[-curr_diff]) {
+        curr_diff++;
+    }
+    else if( curr_diff != min_diff && filled_percent > percent_limits[2-curr_diff]) {
+        curr_diff--;
     }
 
+    if( rate_limited_output(curr_diff != last_diff) ) {
+        ESP_LOGI(BT_APP_CORE_TAG, "%s %u%%, %+d samples", __func__, filled_percent, curr_diff);
+    }
+
+    last_diff = curr_diff;
+
+    return curr_diff;
+}
+
+size_t write_ringbuf(const uint8_t *data, size_t size)
+{
+    size_t ret = size;
+    
+    int diff_samples = rate_control();  // number of samples to add or remove from data
+    
+    if( diff_samples > 0 ) {
+        // send first sample twice
+        xRingbufferSend(s_ringbuf_i2s, (void *)data, AUDIO_SAMPLE_SIZE, (portTickType)portMAX_DELAY);
+    } 
+    else if( diff_samples <= -3 ) {
+        // send new data in three parts, each with last sample removed
+        size /= AUDIO_SAMPLE_SIZE;
+        size /= 3;
+        size -= 1;
+        size *= AUDIO_SAMPLE_SIZE;
+        xRingbufferSend(s_ringbuf_i2s, (void *)data, size, (portTickType)portMAX_DELAY);
+        data += size + AUDIO_SAMPLE_SIZE;
+        xRingbufferSend(s_ringbuf_i2s, (void *)data, size, (portTickType)portMAX_DELAY);
+        data += size + AUDIO_SAMPLE_SIZE;
+    }
+    else if( diff_samples == -2 ) {
+        // send new data in two parts, each with last sample removed
+        size /= AUDIO_SAMPLE_SIZE;
+        size /= 2;
+        size -= 1;
+        size *= AUDIO_SAMPLE_SIZE;
+        xRingbufferSend(s_ringbuf_i2s, (void *)data, size, (portTickType)portMAX_DELAY);
+        data += size + AUDIO_SAMPLE_SIZE;
+    }
+    else if( diff_samples == -1 ) {
+        // just last sample removed
+        size -= AUDIO_SAMPLE_SIZE;
+    } 
+    
     BaseType_t done = xRingbufferSend(s_ringbuf_i2s, (void *)data, size, (portTickType)portMAX_DELAY);
     if(done){
-        return size;
+        return ret;  // number of processed bytes, including dropped
     } else {
         return 0;
     }
