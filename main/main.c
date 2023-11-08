@@ -32,8 +32,11 @@
 #include "esp_a2dp_api.h"
 #include "esp_avrc_api.h"
 #include "driver/i2s.h"
+#include "driver/gpio.h"
 
 #include "spdif.h"
+
+const uint8_t LED_PIN = 2;
 
 /* event for handler "bt_av_hdl_stack_up */
 enum {
@@ -46,6 +49,10 @@ static void bt_av_hdl_stack_evt(uint16_t event, void *p_param);
 
 void app_main()
 {
+    gpio_reset_pin(LED_PIN);
+    gpio_set_direction(LED_PIN, GPIO_MODE_OUTPUT);
+    gpio_set_level(LED_PIN, 1);  // startup, LED on
+
     /* Initialize NVS — it is used to store PHY calibration data */
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -141,6 +148,7 @@ void app_main()
     pin_code[3] = '4';
     esp_bt_gap_set_pin(pin_type, 4, pin_code);
 
+    gpio_set_level(LED_PIN, 0);  // all done, LED off
 }
 
 void bt_app_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
